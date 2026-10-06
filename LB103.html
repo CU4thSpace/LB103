@@ -20,12 +20,15 @@ aside{width:190px;padding:10px;background:var(--panel);border-right:1px solid va
 aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:0 0 8px}
 .lib{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .lib button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;font-size:12px}
-.lib svg{width:44px;height:30px}
+.lib svg{width:56px;height:40px}
+.inv{margin-top:14px;font-size:12px;color:var(--mute);line-height:1.7}.inv b{color:var(--ink)}.inv .over b{color:#c0392b}
 #stage{flex:1;overflow:auto;padding:12px}
 #plan{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--line);touch-action:none;user-select:none}
 .item{cursor:grab}
-.item.sel .shape{stroke:var(--accent);stroke-width:3}
-.item text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.art *{vector-effect:non-scaling-stroke}
+.selbox{display:none;fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none}
+.item.sel .selbox{display:block}
+.item text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
 #sel{display:none;gap:6px;align-items:center;flex-wrap:wrap}
 #sel.on{display:flex}
 #msg{font-size:12px;color:var(--mute);padding:0 12px 8px}
@@ -52,7 +55,7 @@ body.clean header,body.clean aside,body.clean #msg{display:none}
 </header>
 <div id="msg">Click a shape to add it to the room. Drag to move; select to rotate, label, duplicate or delete. Keys: Delete, arrows to nudge, R rotates, Ctrl/Cmd+D duplicates.</div>
 <main>
-  <aside><h2>Library</h2><div class="lib" id="lib"></div></aside>
+  <aside><h2>Library</h2><div class="lib" id="lib"></div><div class="inv" id="inv"></div></aside>
   <div id="stage">
     <svg id="plan" viewBox="0 0 1600 1000">
       <image id="bg" x="0" y="0" width="1600" height="1000" href=""/>
@@ -64,16 +67,25 @@ body.clean header,body.clean aside,body.clean #msg{display:none}
 // Floorplan: tries the same folder first, then the full URL, else use "Choose floorplan…"
 const BG_SOURCES=["4SP_Base1.001.png","https://cu4thspace.github.io/LB103/4SP_Base1.001.png"];
 
-// Library — sizes in feet. Edit or add shapes here.
+// Library — drawn in feet, centred on the origin (the table centre). b = bounding box [x,y,w,h].
+// c = chairs included, lt = large table, bq = banquet table, ck = cocktail table (used by the counters).
+const chair=(x,y,a)=>`<g transform="translate(${x} ${y}) rotate(${a})"><rect x="-.75" y="-.7" width="1.5" height="1.4" rx=".18" fill="#8c8c8c" stroke="#444" stroke-width="1"/><rect x="-.75" y="-.7" width="1.5" height=".38" rx=".12" fill="#6a6a6a" stroke="#444" stroke-width="1"/></g>`;
+const box=(w,h,f)=>`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx=".1" fill="${f}" stroke="#222" stroke-width="1"/>`;
+const ring=n=>Array.from({length:n},(_,i)=>{const a=i*360/n,r=3.05,q=a*Math.PI/180;return chair((r*Math.sin(q)).toFixed(3),(-r*Math.cos(q)).toFixed(3),a)}).join("");
+const round=`<circle r="2.5" fill="#4a4a4a" stroke="#222" stroke-width="1"/>`;
+const tbl=`<rect x="-3" y="-1.25" width="6" height="2.5" rx=".06" fill="#fff" stroke="#999" stroke-width="1"/>`;
 const TYPES={
-  round:{name:"Round table 5'",w:5,h:5,shape:"ellipse",fill:"#f2c14e",label:"Table"},
-  rect6:{name:"Table 6'",w:6,h:2.5,shape:"rect",fill:"#f2c14e",label:"Table"},
-  rect8:{name:"Table 8'",w:8,h:2.5,shape:"rect",fill:"#f2c14e",label:"Table"},
-  chair:{name:"Chair",w:1.6,h:1.6,shape:"rect",fill:"#7aa7d9",label:""},
-  stage:{name:"Stage",w:16,h:8,shape:"rect",fill:"#9b8cc4",label:"Stage"},
-  screen:{name:"Screen",w:8,h:1,shape:"rect",fill:"#444",label:"Screen"},
-  podium:{name:"Podium",w:2,h:2,shape:"rect",fill:"#c47a7a",label:"Podium"},
-  av:{name:"AV station",w:4,h:2.5,shape:"rect",fill:"#6fbf8e",label:"AV"}
+  banq7:{name:"Banquet 60″ + 7 chairs",b:[-3.8,-3.8,7.6,7.6],art:ring(7)+round,label:"",c:7,bq:1},
+  round60:{name:"Banquet 60″",b:[-2.5,-2.5,5,5],art:round,label:"",bq:1},
+  cocktail:{name:"Cocktail 32″",b:[-1.34,-1.34,2.68,2.68],art:`<circle r="1.333" fill="#9a9a9a" stroke="#333" stroke-width="1"/>`,label:"",ck:1},
+  t2:{name:"Table 2.5×6′ + 2 chairs",b:[-3,-2.5,6,3.75],art:chair(-1.6,-1.8,0)+chair(1.6,-1.8,0)+tbl,label:"",c:2,lt:1},
+  t6:{name:"Table 2.5×6′ + 6 chairs",b:[-3,-2.5,6,5],art:[-2,0,2].map(x=>chair(x,-1.8,0)+chair(x,1.8,180)).join("")+tbl,label:"",c:6,lt:1},
+  tbare:{name:"Table 2.5×6′",b:[-3,-1.25,6,2.5],art:tbl,label:"",lt:1},
+  chair:{name:"Stackable chair",b:[-.75,-.7,1.5,1.4],art:chair(0,0,0),label:"",c:1},
+  stage:{name:"Stage",b:[-8,-4,16,8],art:box(16,8,"#9b8cc4"),label:"Stage"},
+  screen:{name:"Screen",b:[-4,-.5,8,1],art:box(8,1,"#444"),label:"Screen"},
+  podium:{name:"Podium",b:[-1,-1,2,2],art:box(2,2,"#c47a7a"),label:"Podium"},
+  av:{name:"AV station",b:[-2,-1.25,4,2.5],art:box(4,2.5,"#6fbf8e"),label:"AV"}
 };
 
 const $=id=>document.getElementById(id), svg=$("plan"), layer=$("items");
@@ -82,10 +94,7 @@ const S=()=>+$("scale").value||12;
 const NS="http://www.w3.org/2000/svg";
 
 // Library buttons
-$("lib").innerHTML=Object.entries(TYPES).map(([k,t])=>{
-  const sh=t.shape==="ellipse"?`<ellipse cx="22" cy="15" rx="12" ry="12" fill="${t.fill}"/>`
-    :`<rect x="${22-Math.min(18,t.w*2.2)}" y="${15-Math.min(12,t.h*3)}" width="${Math.min(36,t.w*4.4)}" height="${Math.min(24,t.h*6)}" rx="2" fill="${t.fill}"/>`;
-  return `<button data-t="${k}"><svg viewBox="0 0 44 30">${sh}</svg>${t.name}</button>`}).join("");
+$("lib").innerHTML=Object.entries(TYPES).map(([k,t])=>`<button data-t="${k}"><svg class="art" viewBox="${t.b[0]-.1} ${t.b[1]-.1} ${t.b[2]+.2} ${t.b[3]+.2}">${t.art}</svg>${t.name}</button>`).join("");
 $("lib").onclick=e=>{const b=e.target.closest("button");if(!b)return;
   const vb=svg.viewBox.baseVal; push();
   const it={id:uid++,type:b.dataset.t,x:vb.width/2+items.length%5*20,y:vb.height/2+items.length%5*20,rot:0,label:TYPES[b.dataset.t].label};
@@ -95,19 +104,14 @@ function push(){hist.push(JSON.stringify(items));if(hist.length>100)hist.shift()
 function snap(v){return $("snap").checked?Math.round(v/(S()/2))*(S()/2):v}
 
 function render(){
-  layer.innerHTML="";
+  layer.innerHTML="";const k=S();
   for(const it of items){
-    const t=TYPES[it.type],w=t.w*S(),h=t.h*S();
+    const t=TYPES[it.type],b=t.b;
     const g=document.createElementNS(NS,"g");
     g.setAttribute("class","item"+(it.id===selId?" sel":""));
     g.dataset.id=it.id;
     g.setAttribute("transform",`translate(${it.x} ${it.y}) rotate(${it.rot})`);
-    const s=document.createElementNS(NS,t.shape==="ellipse"?"ellipse":"rect");
-    s.setAttribute("class","shape");s.setAttribute("fill",t.fill);s.setAttribute("fill-opacity",".92");
-    s.setAttribute("stroke","#222");s.setAttribute("stroke-width","1");
-    if(t.shape==="ellipse"){s.setAttribute("rx",w/2);s.setAttribute("ry",h/2)}
-    else{s.setAttribute("x",-w/2);s.setAttribute("y",-h/2);s.setAttribute("width",w);s.setAttribute("height",h);s.setAttribute("rx",2)}
-    g.appendChild(s);
+    g.innerHTML=`<g class="art" transform="scale(${k})">${t.art}</g><rect class="selbox" x="${b[0]*k-3}" y="${b[1]*k-3}" width="${b[2]*k+6}" height="${b[3]*k+6}"/>`;
     if(it.label){const tx=document.createElementNS(NS,"text");tx.textContent=it.label;
       tx.setAttribute("transform",`rotate(${-it.rot})`);g.appendChild(tx)}
     layer.appendChild(g);
@@ -115,6 +119,9 @@ function render(){
   const cur=items.find(i=>i.id===selId);
   $("sel").classList.toggle("on",!!cur);
   if(cur&&document.activeElement!==$("lbl"))$("lbl").value=cur.label||"";
+  const n=f=>items.reduce((a,i)=>a+(TYPES[i.type][f]||0),0);
+  const row=(l,v,max,extra)=>`<div class="${max&&v>max?"over":""}">${l}: <b>${v}</b>${max?" / "+max+(extra||""):""}</div>`;
+  $("inv").innerHTML=row("Large tables",n("lt"),7)+row("Chairs",n("c"),50," (46)")+row("Banquet tables",n("bq"))+row("Cocktail tables",n("ck"));
 }
 
 function pt(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
@@ -162,7 +169,7 @@ $("save").onclick=()=>{const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([JSON.stringify({scale:S(),items},null,1)],{type:"application/json"}));
   a.download="LB103-layout.json";a.click()};
 $("load").onchange=async e=>{const f=e.target.files[0];if(!f)return;
-  try{const d=JSON.parse(await f.text());push();items=d.items||[];if(d.scale)$("scale").value=d.scale;
+  try{const d=JSON.parse(await f.text());push();items=(d.items||[]).filter(i=>TYPES[i.type]);if(d.scale)$("scale").value=d.scale;
     uid=Math.max(0,...items.map(i=>i.id))+1;selId=null;render()}catch{alert("Couldn't read that layout file.")}e.target.value=""};
 
 // Background loading
