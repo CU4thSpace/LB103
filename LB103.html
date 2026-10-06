@@ -28,7 +28,7 @@ aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(
 .art *{vector-effect:non-scaling-stroke}
 .selbox{display:none;fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none}
 .item.sel .selbox{display:block}
-.item text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+.item>text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
 #sel{display:none;gap:6px;align-items:center;flex-wrap:wrap}
 #sel.on{display:flex}
 #msg{font-size:12px;color:var(--mute);padding:0 12px 8px}
@@ -74,6 +74,12 @@ const box=(w,h,f)=>`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx=
 const ring=n=>Array.from({length:n},(_,i)=>{const a=i*360/n,r=3.05,q=a*Math.PI/180;return chair((r*Math.sin(q)).toFixed(3),(-r*Math.cos(q)).toFixed(3),a)}).join("");
 const round=`<circle r="2.5" fill="#4a4a4a" stroke="#222" stroke-width="1"/>`;
 const tbl=`<rect x="-3" y="-1.25" width="6" height="2.5" rx=".06" fill="#fff" stroke="#999" stroke-width="1"/>`;
+const pouf=w=>`<rect x="${-w/2}" y="-.65" width="${w}" height="1.3" rx=".65" fill="#9a9a9a" stroke="#555" stroke-width="1"/><rect x="${-w/2+.25}" y="-.5" width="${w-.5}" height=".35" rx=".17" fill="#fff" fill-opacity=".35"/>`;
+const cubes=n=>{const sz=2,st=2.3,ph=18*Math.PI/180,off=(n-1)/2;let a="",x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(let i=0;i<n;i++){const cx=(i-off)*st*Math.cos(ph),cy=(i-off)*st*Math.sin(ph);
+    a+=`<rect x="${-sz/2}" y="${-sz/2}" width="${sz}" height="${sz}" transform="translate(${cx.toFixed(3)} ${cy.toFixed(3)}) rotate(30)" fill="#fff" fill-opacity=".6" stroke="#888" stroke-width="1"/>`;
+    x0=Math.min(x0,cx-1.37);x1=Math.max(x1,cx+1.37);y0=Math.min(y0,cy-1.37);y1=Math.max(y1,cy+1.37)}
+  return {art:a,b:[x0,y0,x1-x0,y1-y0]}};
 const TYPES={
   banq7:{name:"Banquet 60″ + 7 chairs",b:[-3.8,-3.8,7.6,7.6],art:ring(7)+round,label:"",c:7,bq:1},
   round60:{name:"Banquet 60″",b:[-2.5,-2.5,5,5],art:round,label:"",bq:1},
@@ -85,8 +91,20 @@ const TYPES={
   stage:{name:"Stage",b:[-8,-4,16,8],art:box(16,8,"#9b8cc4"),label:"Stage"},
   screen:{name:"Screen",b:[-4,-.5,8,1],art:box(8,1,"#444"),label:"Screen"},
   podium:{name:"Podium",b:[-1,-1,2,2],art:box(2,2,"#c47a7a"),label:"Podium"},
-  av:{name:"AV station",b:[-2,-1.25,4,2.5],art:box(4,2.5,"#6fbf8e"),label:"AV"}
+  av:{name:"AV station",b:[-2,-1.25,4,2.5],art:box(4,2.5,"#6fbf8e"),label:"AV"},
+  pouf_l:{name:"Large pouf",b:[-2.5,-.65,5,1.3],art:pouf(5),label:"L1",pl:1},
+  pouf_s:{name:"Small pouf",b:[-1.5,-.65,3,1.3],art:pouf(3),label:"S1",ps:1},
+  stool:{name:"High stool",b:[-.65,-.65,1.3,1.3],art:`<rect x="-.65" y="-.65" width="1.3" height="1.3" rx=".2" fill="#5a5a5a" stroke="#333" stroke-width="1"/><rect x="-.65" y="-.65" width="1.3" height=".55" rx=".2" fill="#9a9a9a" stroke="#333" stroke-width="1"/>`,label:"",hs:1},
+  rolling:{name:"Rolling chair",b:[-1.15,-1.15,2.3,2.3],art:`<rect x="-.85" y="-1.1" width="1.7" height=".55" rx=".27" transform="rotate(-45)" fill="#a8a8a8" stroke="#555" stroke-width="1"/><rect x="-.8" y="-.8" width="1.6" height="1.6" rx=".4" transform="rotate(45)" fill="#666" stroke="#333" stroke-width="1"/>`,label:"",rc:1},
+  stdchair:{name:"Standard chair",b:[-.75,-.75,1.5,1.5],art:`<rect x="-.75" y="-.75" width="1.5" height="1.5" fill="#6a6a6a" stroke="#333" stroke-width="1"/><rect x=".45" y="-.75" width=".3" height="1.5" fill="#aaa" stroke="#333" stroke-width="1"/>`,label:"",sc:1},
+  whiteboard:{name:"Whiteboard",b:[-2.1,-.4,4.2,.8],art:`<rect x="-2" y="-.4" width="4" height=".8" fill="transparent"/><line x1="-2" y1="0" x2="2" y2="0" stroke="#333" stroke-width="2"/><rect x="-2.1" y="-.3" width=".2" height=".6" fill="#555"/><rect x="1.9" y="-.3" width=".2" height=".6" fill="#555"/>`,label:"",wb:1},
+  dcube:{name:"Display cube",b:[-1.25,-1.25,2.5,2.5],art:`<rect x="-1.25" y="-1.25" width="2.5" height="2.5" fill="#9a9a9a" stroke="#666" stroke-width="1"/><rect x="-1.05" y="-1.05" width="2.1" height=".95" fill="#fff"/><text x="0" y=".6" text-anchor="middle" dominant-baseline="central" font-size=".55" font-weight="700" font-family="system-ui,sans-serif" fill="#fff">LION</text>`,label:"",dc:1},
+  cdwall:{name:"Cube display wall",...cubes(2),label:"",cdw:1},
+  cwall:{name:"Cube wall",...cubes(5),label:"",cw:1},
+  coatrack:{name:"Coat rack",b:[-.4,-2.55,.8,5.1],art:`<rect x="-.4" y="-2.5" width=".8" height="5" fill="transparent"/><line x1="0" y1="-2.5" x2="0" y2="2.5" stroke="#555" stroke-width="2.5"/><rect x="-.3" y="-2.55" width=".6" height=".25" fill="#888" stroke="#444" stroke-width="1"/><rect x="-.3" y="2.3" width=".6" height=".25" fill="#888" stroke="#444" stroke-width="1"/>`,label:"",cr:1}
 };
+// How many of each you own (for the counters). Edit the numbers here.
+const STOCK={lt:["Large tables",7],c:["Stackable chairs",50," (46)"],bq:["Banquet tables"],ck:["Cocktail tables"],sc:["Standard chairs",35],rc:["Rolling chairs",10],hs:["High stools",12],pl:["Large poufs",3],ps:["Small poufs",3],wb:["Whiteboards",3],dc:["Display cubes",3],cdw:["Cube display walls",2],cw:["Cube walls",3],cr:["Coat racks",2]};
 
 const $=id=>document.getElementById(id), svg=$("plan"), layer=$("items");
 let items=[], selId=null, hist=[], uid=1, drag=null;
@@ -121,7 +139,7 @@ function render(){
   if(cur&&document.activeElement!==$("lbl"))$("lbl").value=cur.label||"";
   const n=f=>items.reduce((a,i)=>a+(TYPES[i.type][f]||0),0);
   const row=(l,v,max,extra)=>`<div class="${max&&v>max?"over":""}">${l}: <b>${v}</b>${max?" / "+max+(extra||""):""}</div>`;
-  $("inv").innerHTML=row("Large tables",n("lt"),7)+row("Chairs",n("c"),50," (46)")+row("Banquet tables",n("bq"))+row("Cocktail tables",n("ck"));
+  $("inv").innerHTML=Object.entries(STOCK).map(([f,[l,m,x]])=>row(l,n(f),m,x)).join("");
 }
 
 function pt(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
