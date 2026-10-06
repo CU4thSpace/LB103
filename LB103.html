@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>4th Space LB-103 Layout Planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{--bg:#f4f4f5;--panel:#fff;--ink:#1c1c1e;--mute:#6b6b70;--line:#d9d9de;--accent:#912338}
 @media (prefers-color-scheme:dark){:root{--bg:#18181a;--panel:#232326;--ink:#f2f2f3;--mute:#9a9aa0;--line:#3a3a3f}}
@@ -31,6 +32,12 @@ aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(
 .item>text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
 #sel{display:none;gap:6px;align-items:center;flex-wrap:wrap}
 #sel.on{display:flex}
+#capture{line-height:0}
+#ctl{position:fixed;right:16px;bottom:16px;display:flex;gap:10px;padding:8px;border-radius:16px;background:rgba(17,17,17,.7);z-index:20}
+#ctl button{width:50px;height:50px;padding:0;border:0;border-radius:12px;background:rgba(255,255,255,.22);color:#fff;font-size:22px;line-height:1;cursor:pointer;transition:background .15s}
+#ctl button:hover{background:rgba(255,255,255,.4)}
+#ctl button:disabled{opacity:.6;cursor:wait}
+@media print{#ctl{display:none}}
 #msg{font-size:12px;color:var(--mute);padding:0 12px 8px}
 body.clean header,body.clean aside,body.clean #msg{display:none}
 @media print{header,aside,#msg{display:none}#stage{padding:0}}
@@ -57,12 +64,13 @@ body.clean header,body.clean aside,body.clean #msg{display:none}
 <main>
   <aside><h2>Library</h2><div class="lib" id="lib"></div><div class="inv" id="inv"></div></aside>
   <div id="stage">
-    <svg id="plan" viewBox="0 0 1600 1000">
+    <div id="capture"><svg id="plan" viewBox="0 0 1600 1000">
       <image id="bg" x="0" y="0" width="1600" height="1000" href=""/>
       <g id="items"></g>
-    </svg>
+    </svg></div>
   </div>
 </main>
+<div id="ctl"><button id="pngBtn" title="Save as PNG" onclick="saveAsPng()">⬇</button></div>
 <script>
 // Floorplan: tries the same folder first, then the full URL, else use "Choose floorplan…"
 const BG_SOURCES=["4SP_Base1.001.png","https://cu4thspace.github.io/LB103/4SP_Base1.001.png"];
@@ -127,7 +135,9 @@ function render(){
     g.setAttribute("transform",`translate(${it.x} ${it.y}) rotate(${it.rot})`);
     g.innerHTML=`<g class="art" transform="scale(${k})">${t.art}</g><rect class="selbox" x="${b[0]*k-3}" y="${b[1]*k-3}" width="${b[2]*k+6}" height="${b[3]*k+6}"/>`;
     if(it.label){const tx=document.createElementNS(NS,"text");tx.textContent=it.label;
-      tx.setAttribute("transform",`rotate(${-it.rot})`);g.appendChild(tx)}
+      tx.setAttribute("transform",`rotate(${-it.rot})`);
+      Object.entries({"text-anchor":"middle","dominant-baseline":"central","font-family":"system-ui,sans-serif","font-size":12,"font-weight":600,fill:"#111",stroke:"#fff","stroke-width":3,"paint-order":"stroke","stroke-linejoin":"round"}).forEach(([a,v])=>tx.setAttribute(a,v));
+      g.appendChild(tx)}
     layer.appendChild(g);
   }
   const cur=items.find(i=>i.id===selId);
@@ -196,6 +206,58 @@ function setBg(src){return new Promise((res,rej)=>{const im=new Image();
   $("msg").textContent="Couldn't load the floorplan automatically — use “Choose floorplan…” to pick 4SP_Base1.001.png."})();
 $("bgfile").onchange=e=>{const f=e.target.files[0];if(!f)return;
   const r=new FileReader();r.onload=()=>setBg(r.result);r.readAsDataURL(f)};
+
+// ---- Save as PNG (1920x1080) ----
+function bgToDataUrl(){
+  const src=$("bg").getAttribute("href");
+  if(!src||src.startsWith("data:"))return Promise.resolve(null);
+  return fetch(src).then(r=>{if(!r.ok)throw new Error("Floorplan fetch failed");return r.blob()})
+    .then(b=>new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(b)}));
+}
+async function saveAsPng(){
+  const btn=$("pngBtn"),ctl=$("ctl"),stage=$("stage"),wrap=$("capture"),bg=$("bg");
+  const prevSel=selId,prevHref=bg.getAttribute("href"),prevOverflow=stage.style.overflow;
+  btn.disabled=true;btn.innerHTML="…";
+  ctl.style.display="none";
+  try{
+    selId=null;render();                                   // no selection outline in the image
+    layer.querySelectorAll(".selbox").forEach(n=>n.remove());
+    layer.querySelectorAll(".art *").forEach(n=>n.setAttribute("vector-effect","non-scaling-stroke"));
+    const data=await bgToDataUrl();                         // SVG-as-image can't load external files
+    if(data)bg.setAttribute("href",data);
+    stage.style.overflow="visible";
+    const shot=await html2canvas(wrap,{useCORS:true,allowTaint:false,scale:2,backgroundColor:"#111",imageTimeout:10000,logging:false});
+
+    const d=new Date(),ds=[d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");
+    const out=document.createElement("canvas");out.width=1920;out.height=1080;
+    const c=out.getContext("2d");
+    c.fillStyle="#111";c.fillRect(0,0,1920,1080);
+    c.textBaseline="middle";c.fillStyle="#fff";
+    c.font="700 40px system-ui,-apple-system,'Segoe UI',sans-serif";
+    c.fillText("4thSpace_Layout",40,48);
+    const tw=c.measureText("4thSpace_Layout").width;
+    c.fillStyle="#aaa";c.font="400 32px system-ui,-apple-system,'Segoe UI',sans-serif";
+    c.fillText("—  "+ds,40+tw+18,48);
+    const bx=40,by=96,bw=1840,bh=944,k=Math.min(bw/shot.width,bh/shot.height);
+    const w=shot.width*k,h=shot.height*k;
+    c.imageSmoothingQuality="high";
+    c.drawImage(shot,bx+(bw-w)/2,by+(bh-h)/2,w,h);
+
+    const a=document.createElement("a");
+    a.download="4thSpace_Layout_"+ds+".png";
+    a.href=out.toDataURL("image/png");
+    document.body.appendChild(a);a.click();a.remove();
+  }catch(err){
+    console.error(err);
+    alert("Export failed — see console for details.");
+  }finally{
+    stage.style.overflow=prevOverflow;
+    bg.setAttribute("href",prevHref);
+    selId=prevSel;render();
+    ctl.style.display="";
+    btn.disabled=false;btn.innerHTML="⬇";
+  }
+}
 
 render();
 </script>
