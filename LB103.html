@@ -33,11 +33,7 @@ aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(
 #sel{display:none;gap:6px;align-items:center;flex-wrap:wrap}
 #sel.on{display:flex}
 #capture{line-height:0}
-#ctl{position:fixed;right:16px;bottom:16px;display:flex;gap:10px;padding:8px;border-radius:16px;background:rgba(17,17,17,.7);z-index:20}
-#ctl button{width:50px;height:50px;padding:0;border:0;border-radius:12px;background:rgba(255,255,255,.22);color:#fff;font-size:22px;line-height:1;cursor:pointer;transition:background .15s}
-#ctl button:hover{background:rgba(255,255,255,.4)}
-#ctl button:disabled{opacity:.6;cursor:wait}
-@media print{#ctl{display:none}}
+button:disabled{opacity:.6;cursor:wait}
 #msg{font-size:12px;color:var(--mute);padding:0 12px 8px}
 body.clean header,body.clean aside,body.clean #msg{display:none}
 @media print{header,aside,#msg{display:none}#stage{padding:0}}
@@ -51,6 +47,7 @@ body.clean header,body.clean aside,body.clean #msg{display:none}
   <label>Scale <input type="number" id="scale" value="12" min="1" step="0.5"> px/ft</label>
   <button id="save">Save JSON</button>
   <label class="btn">Load JSON<input type="file" id="load" accept=".json" hidden></label>
+  <button id="pngBtn" title="Download a 1920×1080 PNG of the layout" onclick="saveAsPng()">Download Image</button>
   <label class="btn">Choose floorplan…<input type="file" id="bgfile" accept="image/*" hidden></label>
   <button id="clean">Clean view</button>
   <button id="clear">Clear all</button>
@@ -70,7 +67,6 @@ body.clean header,body.clean aside,body.clean #msg{display:none}
     </svg></div>
   </div>
 </main>
-<div id="ctl"><button id="pngBtn" title="Save as PNG" onclick="saveAsPng()">⬇</button></div>
 <script>
 // Floorplan: tries the same folder first, then the full URL, else use "Choose floorplan…"
 const BG_SOURCES=["4SP_Base1.001.png","https://cu4thspace.github.io/LB103/4SP_Base1.001.png"];
@@ -215,10 +211,9 @@ function bgToDataUrl(){
     .then(b=>new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(b)}));
 }
 async function saveAsPng(){
-  const btn=$("pngBtn"),ctl=$("ctl"),stage=$("stage"),wrap=$("capture"),bg=$("bg");
+  const btn=$("pngBtn"),stage=$("stage"),wrap=$("capture"),bg=$("bg");
   const prevSel=selId,prevHref=bg.getAttribute("href"),prevOverflow=stage.style.overflow;
   btn.disabled=true;btn.innerHTML="…";
-  ctl.style.display="none";
   try{
     selId=null;render();                                   // no selection outline in the image
     layer.querySelectorAll(".selbox").forEach(n=>n.remove());
@@ -254,8 +249,7 @@ async function saveAsPng(){
     stage.style.overflow=prevOverflow;
     bg.setAttribute("href",prevHref);
     selId=prevSel;render();
-    ctl.style.display="";
-    btn.disabled=false;btn.innerHTML="⬇";
+    btn.disabled=false;btn.innerHTML="Download Image";
   }
 }
 
