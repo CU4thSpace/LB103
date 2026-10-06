@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4th Space LB-103 Layout Planner</title>
+<style>
+:root{--bg:#f4f4f5;--panel:#fff;--ink:#1c1c1e;--mute:#6b6b70;--line:#d9d9de;--accent:#912338}
+@media (prefers-color-scheme:dark){:root{--bg:#18181a;--panel:#232326;--ink:#f2f2f3;--mute:#9a9aa0;--line:#3a3a3f}}
+*{box-sizing:border-box}
+body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100vh}
+header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:15px;margin:0 8px 0 0}
+button,label.btn,input,select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px}
+button,label.btn{cursor:pointer}
+button:hover,label.btn:hover{border-color:var(--accent)}
+input[type=number]{width:64px}
+main{flex:1;display:flex;min-height:0}
+aside{width:190px;padding:10px;background:var(--panel);border-right:1px solid var(--line);overflow:auto}
+aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:0 0 8px}
+.lib{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.lib button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;font-size:12px}
+.lib svg{width:44px;height:30px}
+#stage{flex:1;overflow:auto;padding:12px}
+#plan{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--line);touch-action:none;user-select:none}
+.item{cursor:grab}
+.item.sel .shape{stroke:var(--accent);stroke-width:3}
+.item text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+#sel{display:none;gap:6px;align-items:center;flex-wrap:wrap}
+#sel.on{display:flex}
+#msg{font-size:12px;color:var(--mute);padding:0 12px 8px}
+body.clean header,body.clean aside,body.clean #msg{display:none}
+@media print{header,aside,#msg{display:none}#stage{padding:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>LB-103 Layout Planner</h1>
+  <button id="undo">Undo</button>
+  <label><input type="checkbox" id="snap" checked> Snap</label>
+  <label>Scale <input type="number" id="scale" value="12" min="1" step="0.5"> px/ft</label>
+  <button id="save">Save JSON</button>
+  <label class="btn">Load JSON<input type="file" id="load" accept=".json" hidden></label>
+  <label class="btn">Choose floorplan…<input type="file" id="bgfile" accept="image/*" hidden></label>
+  <button id="clean">Clean view</button>
+  <button id="clear">Clear all</button>
+  <span id="sel">
+    <input id="lbl" placeholder="Label">
+    <button data-r="-15">⟲ 15°</button><button data-r="15">⟳ 15°</button><button data-r="90">90°</button>
+    <button id="dup">Duplicate</button><button id="del">Delete</button>
+  </span>
+</header>
+<div id="msg">Click a shape to add it to the room. Drag to move; select to rotate, label, duplicate or delete. Keys: Delete, arrows to nudge, R rotates, Ctrl/Cmd+D duplicates.</div>
+<main>
+  <aside><h2>Library</h2><div class="lib" id="lib"></div></aside>
+  <div id="stage">
+    <svg id="plan" viewBox="0 0 1600 1000">
+      <image id="bg" x="0" y="0" width="1600" height="1000" href=""/>
+      <g id="items"></g>
+    </svg>
+  </div>
+</main>
+<script>
+// Floorplan: tries the same folder first, then the full URL, else use "Choose floorplan…"
+const BG_SOURCES=["4SP_Base1.001.png","https://cu4thspace.github.io/LB103/4SP_Base1.001.png"];
+
+// Library — sizes in feet. Edit or add shapes here.
+const TYPES={
+  round:{name:"Round table 5'",w:5,h:5,shape:"ellipse",fill:"#f2c14e",label:"Table"},
+  rect6:{name:"Table 6'",w:6,h:2.5,shape:"rect",fill:"#f2c14e",label:"Table"},
+  rect8:{name:"Table 8'",w:8,h:2.5,shape:"rect",fill:"#f2c14e",label:"Table"},
+  chair:{name:"Chair",w:1.6,h:1.6,shape:"rect",fill:"#7aa7d9",label:""},
+  stage:{name:"Stage",w:16,h:8,shape:"rect",fill:"#9b8cc4",label:"Stage"},
+  screen:{name:"Screen",w:8,h:1,shape:"rect",fill:"#444",label:"Screen"},
+  podium:{name:"Podium",w:2,h:2,shape:"rect",fill:"#c47a7a",label:"Podium"},
+  av:{name:"AV station",w:4,h:2.5,shape:"rect",fill:"#6fbf8e",label:"AV"}
+};
+
+const $=id=>document.getElementById(id), svg=$("plan"), layer=$("items");
+let items=[], selId=null, hist=[], uid=1, drag=null;
+const S=()=>+$("scale").value||12;
+const NS="http://www.w3.org/2000/svg";
+
+// Library buttons
+$("lib").innerHTML=Object.entries(TYPES).map(([k,t])=>{
+  const sh=t.shape==="ellipse"?`<ellipse cx="22" cy="15" rx="12" ry="12" fill="${t.fill}"/>`
+    :`<rect x="${22-Math.min(18,t.w*2.2)}" y="${15-Math.min(12,t.h*3)}" width="${Math.min(36,t.w*4.4)}" height="${Math.min(24,t.h*6)}" rx="2" fill="${t.fill}"/>`;
+  return `<button data-t="${k}"><svg viewBox="0 0 44 30">${sh}</svg>${t.name}</button>`}).join("");
+$("lib").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  const vb=svg.viewBox.baseVal; push();
+  const it={id:uid++,type:b.dataset.t,x:vb.width/2+items.length%5*20,y:vb.height/2+items.length%5*20,rot:0,label:TYPES[b.dataset.t].label};
+  items.push(it);selId=it.id;render()};
+
+function push(){hist.push(JSON.stringify(items));if(hist.length>100)hist.shift()}
+function snap(v){return $("snap").checked?Math.round(v/(S()/2))*(S()/2):v}
+
+function render(){
+  layer.innerHTML="";
+  for(const it of items){
+    const t=TYPES[it.type],w=t.w*S(),h=t.h*S();
+    const g=document.createElementNS(NS,"g");
+    g.setAttribute("class","item"+(it.id===selId?" sel":""));
+    g.dataset.id=it.id;
+    g.setAttribute("transform",`translate(${it.x} ${it.y}) rotate(${it.rot})`);
+    const s=document.createElementNS(NS,t.shape==="ellipse"?"ellipse":"rect");
+    s.setAttribute("class","shape");s.setAttribute("fill",t.fill);s.setAttribute("fill-opacity",".92");
+    s.setAttribute("stroke","#222");s.setAttribute("stroke-width","1");
+    if(t.shape==="ellipse"){s.setAttribute("rx",w/2);s.setAttribute("ry",h/2)}
+    else{s.setAttribute("x",-w/2);s.setAttribute("y",-h/2);s.setAttribute("width",w);s.setAttribute("height",h);s.setAttribute("rx",2)}
+    g.appendChild(s);
+    if(it.label){const tx=document.createElementNS(NS,"text");tx.textContent=it.label;
+      tx.setAttribute("transform",`rotate(${-it.rot})`);g.appendChild(tx)}
+    layer.appendChild(g);
+  }
+  const cur=items.find(i=>i.id===selId);
+  $("sel").classList.toggle("on",!!cur);
+  if(cur&&document.activeElement!==$("lbl"))$("lbl").value=cur.label||"";
+}
+
+function pt(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
+svg.addEventListener("pointerdown",e=>{
+  const g=e.target.closest(".item");
+  if(!g){selId=null;render();return}
+  selId=+g.dataset.id;const it=items.find(i=>i.id===selId),p=pt(e);
+  drag={dx:it.x-p.x,dy:it.y-p.y,moved:false};push();
+  svg.setPointerCapture(e.pointerId);render();
+});
+svg.addEventListener("pointermove",e=>{
+  if(!drag)return;const it=items.find(i=>i.id===selId),p=pt(e);
+  it.x=snap(p.x+drag.dx);it.y=snap(p.y+drag.dy);drag.moved=true;render();
+});
+svg.addEventListener("pointerup",()=>{if(drag&&!drag.moved)hist.pop();drag=null});
+
+const cur=()=>items.find(i=>i.id===selId);
+document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{const c=cur();if(!c)return;push();c.rot=(c.rot+ +b.dataset.r)%360;render()});
+$("lbl").oninput=e=>{const c=cur();if(c){c.label=e.target.value;render()}};
+$("lbl").onchange=()=>{};
+function dup(){const c=cur();if(!c)return;push();const n={...c,id:uid++,x:c.x+S()*2,y:c.y+S()*2};items.push(n);selId=n.id;render()}
+function del(){if(!cur())return;push();items=items.filter(i=>i.id!==selId);selId=null;render()}
+$("dup").onclick=dup;$("del").onclick=del;
+$("undo").onclick=()=>{if(hist.length){items=JSON.parse(hist.pop());selId=null;render()}};
+$("clear").onclick=()=>{if(items.length&&confirm("Remove all shapes?")){push();items=[];selId=null;render()}};
+$("scale").oninput=render;
+$("clean").onclick=()=>{document.body.classList.add("clean");selId=null;render();
+  const b=document.createElement("button");b.textContent="Exit clean view";
+  b.style.cssText="position:fixed;top:8px;right:8px;z-index:9";b.onclick=()=>{document.body.classList.remove("clean");b.remove()};document.body.appendChild(b)};
+
+window.addEventListener("keydown",e=>{
+  if(["INPUT","TEXTAREA"].includes(document.activeElement.tagName))return;
+  const c=cur(),k=e.key;
+  if((e.ctrlKey||e.metaKey)&&k==="d"){e.preventDefault();dup();return}
+  if((e.ctrlKey||e.metaKey)&&k==="z"){e.preventDefault();$("undo").click();return}
+  if(!c)return;
+  if(k==="Delete"||k==="Backspace"){e.preventDefault();del()}
+  else if(k==="r"||k==="R"){push();c.rot=(c.rot+(e.shiftKey?-15:15))%360;render()}
+  else if(k.startsWith("Arrow")){e.preventDefault();push();const d=e.shiftKey?S()*2:S()/2;
+    if(k==="ArrowLeft")c.x-=d;if(k==="ArrowRight")c.x+=d;if(k==="ArrowUp")c.y-=d;if(k==="ArrowDown")c.y+=d;render()}
+});
+
+// Save / load
+$("save").onclick=()=>{const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({scale:S(),items},null,1)],{type:"application/json"}));
+  a.download="LB103-layout.json";a.click()};
+$("load").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  try{const d=JSON.parse(await f.text());push();items=d.items||[];if(d.scale)$("scale").value=d.scale;
+    uid=Math.max(0,...items.map(i=>i.id))+1;selId=null;render()}catch{alert("Couldn't read that layout file.")}e.target.value=""};
+
+// Background loading
+function setBg(src){return new Promise((res,rej)=>{const im=new Image();
+  im.onload=()=>{const bg=$("bg");bg.setAttribute("href",src);
+    bg.setAttribute("width",im.naturalWidth);bg.setAttribute("height",im.naturalHeight);
+    svg.setAttribute("viewBox",`0 0 ${im.naturalWidth} ${im.naturalHeight}`);res()};
+  im.onerror=rej;im.src=src})}
+(async()=>{for(const s of BG_SOURCES){try{await setBg(s);return}catch{}}
+  $("msg").textContent="Couldn't load the floorplan automatically — use “Choose floorplan…” to pick 4SP_Base1.001.png."})();
+$("bgfile").onchange=e=>{const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>setBg(r.result);r.readAsDataURL(f)};
+
+render();
+</script>
+</body>
+</html>
