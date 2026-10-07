@@ -26,8 +26,8 @@ tr.b td:first-child{font-weight:700;color:var(--strong)}
 </head>
 <body>
 <main>
-  <label for="total">Total (taxes incluses)</label>
-  <div class="input"><input id="total" type="number" inputmode="decimal" step="0.01" min="0" placeholder="5205.63" autofocus><span>$</span></div>
+  <label for="total">Sous-total</label>
+  <div class="input"><input id="total" type="number" inputmode="decimal" step="0.01" min="0" placeholder="5000" autofocus><span>$</span></div>
   <table>
     <tr class="b"><td>Sous-total</td><td id="sub">—</td></tr>
     <tr><td>Frais d'administration 10%</td><td id="fee">—</td></tr>
@@ -40,15 +40,16 @@ tr.b td:first-child{font-weight:700;color:var(--strong)}
 const GST=0.05, QST=0.09975, FEE=0.10;
 const f=n=>n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' $';
 const $=id=>document.getElementById(id);
+const r=x=>Math.round(x*100+1e-6)/100;
 function calc(){
-  const t=parseFloat($('total').value);
-  if(isNaN(t)){['sub','fee','gst','qst','tot'].forEach(i=>$(i).textContent='—');return}
-  const sub=Math.round(t/(1+GST+QST)/(1+FEE)*100)/100;
-  const fee=Math.round(sub*FEE*100)/100;
+  const sub=parseFloat($('total').value);
+  if(isNaN(sub)){['sub','fee','gst','qst','tot'].forEach(i=>$(i).textContent='—');return}
+  const fee=r(sub*FEE);
   const taxable=sub+fee; // taxes apply to subtotal + admin fee
-  const gst=Math.round(taxable*GST*100)/100;
-  const qst=Math.round((t-taxable-gst)*100)/100; // keeps the lines summing to the total
-  $('sub').textContent=f(sub);$('fee').textContent=f(fee);$('gst').textContent=f(gst);$('qst').textContent=f(qst);$('tot').textContent=f(t);
+  const gst=r(taxable*GST);
+  const qst=r(taxable*QST);
+  const tot=r(sub+fee+gst+qst);
+  $('sub').textContent=f(sub);$('fee').textContent=f(fee);$('gst').textContent=f(gst);$('qst').textContent=f(qst);$('tot').textContent=f(tot);
 }
 $('total').addEventListener('input',calc);
 </script>
