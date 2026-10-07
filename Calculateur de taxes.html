@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculateur de taxes</title>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff;--fg:#4a4f57;--strong:#000;--line:#dcdfe3;--muted:#8a9099;--accent:#2563eb;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16181b;--fg:#c3c8cf;--strong:#fff;--line:#33373d;--muted:#7d838c;--accent:#6ea0ff}}
+:root[data-theme="dark"]{--bg:#16181b;--fg:#c3c8cf;--strong:#fff;--line:#33373d;--muted:#7d838c;--accent:#6ea0ff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Lato,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:22px}
+main{max-width:620px;margin:0 auto;padding:40px 24px}
+label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+.input{display:flex;align-items:center;gap:8px;margin-bottom:28px}
+input{flex:1;font:inherit;font-size:22px;color:var(--strong);background:transparent;border:1px solid var(--line);border-radius:6px;padding:10px 12px;min-width:0}
+input:focus{outline:2px solid var(--accent);outline-offset:1px}
+table{width:100%;border-collapse:collapse}
+td{padding:16px 8px;border-top:1px solid var(--line)}
+tr:last-child td{border-bottom:1px solid var(--line)}
+td:first-child{width:50%}
+tr.b td:first-child{font-weight:700;color:var(--strong)}
+</style>
+</head>
+<body>
+<main>
+  <label for="total">Total (taxes incluses)</label>
+  <div class="input"><input id="total" type="number" inputmode="decimal" step="0.01" min="0" placeholder="5205.63" autofocus><span>$</span></div>
+  <table>
+    <tr class="b"><td>Sous-total</td><td id="sub">—</td></tr>
+    <tr><td>GST 5%</td><td id="gst">—</td></tr>
+    <tr><td>QST 9.975%</td><td id="qst">—</td></tr>
+    <tr class="b"><td>Total</td><td id="tot">—</td></tr>
+  </table>
+</main>
+<script>
+const GST=0.05, QST=0.09975;
+const f=n=>n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' $';
+const $=id=>document.getElementById(id);
+function calc(){
+  const t=parseFloat($('total').value);
+  if(isNaN(t)){['sub','gst','qst','tot'].forEach(i=>$(i).textContent='—');return}
+  const sub=Math.round(t/(1+GST+QST)*100)/100;
+  const gst=Math.round(sub*GST*100)/100;
+  const qst=Math.round((t-sub-gst)*100)/100; // keeps the lines summing to the total
+  $('sub').textContent=f(sub);$('gst').textContent=f(gst);$('qst').textContent=f(qst);$('tot').textContent=f(t);
+}
+$('total').addEventListener('input',calc);
+</script>
+</body>
+</html>
