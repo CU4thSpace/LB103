@@ -22,7 +22,6 @@ aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(
 .lib{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .lib button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;font-size:12px}
 .lib svg{width:56px;height:40px}
-.inv{margin-top:14px;font-size:12px;color:var(--mute);line-height:1.7}.inv b{color:var(--ink)}.inv .over b{color:#c0392b}
 #stage{flex:1;overflow:auto;padding:12px}
 #plan{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--line);touch-action:none;user-select:none}
 .item{cursor:grab}
@@ -32,7 +31,11 @@ aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(
 .item>text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
 #sel{display:none;gap:6px;align-items:center;flex-wrap:wrap}
 #sel.on{display:flex}
-#capture{line-height:0}
+#capture{position:relative;line-height:0}
+#inv{position:absolute;left:12px;bottom:12px;padding:8px 12px;background:rgba(255,255,255,.92);border:1px solid #bbb;border-radius:8px;font:12px/1.6 system-ui,-apple-system,'Segoe UI',sans-serif;color:#111;pointer-events:none}
+#inv:empty{display:none}
+#inv h3{margin:0 0 4px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#555}
+#inv .over{color:#c0392b}
 button:disabled{opacity:.6;cursor:wait}
 #msg{font-size:12px;color:var(--mute);padding:0 12px 8px}
 body.clean header,body.clean aside,body.clean #msg{display:none}
@@ -59,12 +62,12 @@ body.clean header,body.clean aside,body.clean #msg{display:none}
 </header>
 <div id="msg">Click a shape to add it to the room. Drag to move; select to rotate, label, duplicate or delete. Keys: Delete, arrows to nudge, R rotates, Ctrl/Cmd+D duplicates.</div>
 <main>
-  <aside><h2>Library</h2><div class="lib" id="lib"></div><div class="inv" id="inv"></div></aside>
+  <aside><h2>Library</h2><div class="lib" id="lib"></div></aside>
   <div id="stage">
     <div id="capture"><svg id="plan" viewBox="0 0 1600 1000">
       <image id="bg" x="0" y="0" width="1600" height="1000" href=""/>
       <g id="items"></g>
-    </svg></div>
+    </svg><div id="inv"></div></div>
   </div>
 </main>
 <script>
@@ -141,7 +144,8 @@ function render(){
   if(cur&&document.activeElement!==$("lbl"))$("lbl").value=cur.label||"";
   const n=f=>items.reduce((a,i)=>a+(TYPES[i.type][f]||0),0);
   const row=(l,v,max,extra)=>`<div class="${max&&v>max?"over":""}">${l}: <b>${v}</b>${max?" / "+max+(extra||""):""}</div>`;
-  $("inv").innerHTML=Object.entries(STOCK).map(([f,[l,m,x]])=>row(l,n(f),m,x)).join("");
+  const rows=Object.entries(STOCK).filter(([f])=>n(f)>0).map(([f,[l,m,x]])=>row(l,n(f),m,x)).join("");
+  $("inv").innerHTML=rows?"<h3>Furniture</h3>"+rows:"";
 }
 
 function pt(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
