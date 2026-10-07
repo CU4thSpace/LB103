@@ -45,10 +45,11 @@ function calc(){
   const sub=parseFloat($('total').value);
   if(isNaN(sub)){['sub','fee','gst','qst','tot'].forEach(i=>$(i).textContent='—');return}
   const fee=r(sub*FEE);
-  const taxable=sub+fee; // taxes apply to subtotal + admin fee
-  const gst=r(taxable*GST);
-  const qst=r(taxable*QST);
-  const tot=r(sub+fee+gst+qst);
+  const afterFee=sub+fee;          // 1000 -> 1100
+  const gst=r(afterFee*GST);
+  const afterGst=afterFee+gst;     // 1100 -> 1155
+  const qst=r(afterGst*QST);       // QST applied on top of the running total
+  const tot=r(afterGst+qst);
   $('sub').textContent=f(sub);$('fee').textContent=f(fee);$('gst').textContent=f(gst);$('qst').textContent=f(qst);$('tot').textContent=f(tot);
 }
 $('total').addEventListener('input',calc);
