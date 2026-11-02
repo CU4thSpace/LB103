@@ -106,16 +106,16 @@ function footprint(f){ // ellipse on floor, in metres, relative to fixture
   return {off:(near+far)/2,rMaj:(far-near)/2,rMin:slant*Math.tan(a)};
 }
 function lab(T,x,y,t,col,inv){
-  el("circle",{cx:x,cy:y,r:21,fill:inv?"#111":"#fff",stroke:col,"stroke-width":5},T);
-  const s=el("text",{x,y:y+8,"text-anchor":"middle","font-size":22,"font-weight":700,"font-family":"system-ui,sans-serif",fill:col},T);s.textContent=t;
+  el("circle",{cx:x,cy:y,r:10.5,fill:inv?"#111":"#fff",stroke:col,"stroke-width":2.5},T);
+  const s=el("text",{x,y:y+4,"text-anchor":"middle","font-size":11,"font-weight":700,"font-family":"system-ui,sans-serif",fill:col},T);s.textContent=t;
 }
 function deco(T,TC,RED,inv){
   TRACKS.forEach(k=>{
     const col=k.c?RED:TC;
     el("rect",{x:(k.c?k.x2:k.x1)-2,y:k.y-13,width:4,height:26,fill:col},T);
-    lab(T,k.c?k.x1-26:k.x2+25,k.y,k.l,col,inv);
+    lab(T,k.c?k.x1-12:k.x2+12,k.y,k.l,col,inv);
   });
-  el("rect",{x:789,y:378,width:409,height:4,fill:TC},T);
+  el("rect",{x:789,y:378,width:421,height:4,fill:TC},T);
   el("rect",{x:1523,y:727,width:4,height:168,fill:TC},T);
   [["A",1222,383],["P",321,481],["R",1522,670]].forEach(([l,x,y])=>lab(T,x,y,l,TC,inv));
 }
@@ -130,8 +130,9 @@ function draw(){
     const p=footprint(f),az=rad(f.az),dx=Math.sin(az),dy=-Math.cos(az),cx=f.x+dx*p.off*S.scale,cy=Y(f)+dy*p.off*S.scale;
     if(showLight)el("ellipse",{cx,cy,rx:p.rMaj*S.scale,ry:p.rMin*S.scale,transform:`rotate(${f.az-90} ${cx} ${cy})`,fill:"url(#fade)","fill-opacity":S.op/100},L);
     const y=Y(f),sp=f.k==="s",rc=sp||!!TRACKS[f.t].c,g=el("g",{"data-i":i,style:"cursor:grab"},F);
-    if(f.tilt>0){el("line",{x1:f.x,y1:y,x2:f.x+dx*20,y2:y+dy*20,stroke:rc?RED:TC,"stroke-width":3,"stroke-linecap":"round"},g);}
-    el("rect",{x:f.x-(sp?12:8),y:y-(sp?7:14),width:sp?24:16,height:sp?14:28,rx:sp?7:6,fill:rc?RED:TC,transform:"rotate("+(sp?f.rot||0:0)+" "+f.x+" "+y+")",stroke:i===sel?"#ff7a00":RING,"stroke-width":i===sel?4:2},g);
+    el("circle",{cx:f.x,cy:y,r:14,fill:"transparent"},g);
+    if(f.tilt>0){el("line",{x1:f.x,y1:y,x2:f.x+dx*10,y2:y+dy*10,stroke:rc?RED:TC,"stroke-width":2,"stroke-linecap":"round"},g);}
+    el("rect",{x:f.x-(sp?6:4),y:y-(sp?3.5:7),width:sp?12:8,height:sp?7:14,rx:sp?3.5:3,fill:rc?RED:TC,transform:"rotate("+(sp?f.rot||0:0)+" "+f.x+" "+y+")",stroke:i===sel?"#ff7a00":RING,"stroke-width":i===sel?3:1.5},g);
     if(showCentre)el("circle",{cx,cy,r:5,fill:"#c00"},F);
   });
   const ns=S.fx.filter(f=>f.k==="s").length;$("count").textContent=(S.fx.length-ns)+" track fixtures, "+ns+" spots on plan";table();
