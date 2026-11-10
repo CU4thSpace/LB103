@@ -84,7 +84,7 @@ tr.t td{font-weight:700;border-top:2px solid var(--ink)}
 </main>
 <script>
 const NS="http://www.w3.org/2000/svg";
-const TRACKS=[{y:488,x1:508,x2:1436,c:1,l:"C"},{y:525,x1:508,x2:1436,l:"B"},{y:705,x1:236,x2:604,c:1,l:"J"},{y:736,x1:236,x2:604,l:"H"},{y:705,x1:708,x2:1436,c:1,l:"F"},{y:736,x1:708,x2:1436,l:"G"},{y:838,x1:236,x2:604,c:1,l:"K"},{y:869,x1:236,x2:604,l:"Q"},{y:838,x1:708,x2:1436,c:1,l:"N"},{y:868,x1:708,x2:1436,l:"M"},{y:987,x1:236,x2:604,c:1,l:"V"},{y:1018,x1:236,x2:604,l:"W"},{y:987,x1:708,x2:1436,c:1,l:"T"},{y:1018,x1:708,x2:1436,l:"U"},{y:1138,x1:822,x2:988,c:1,l:"Y"},{y:1169,x1:822,x2:988,l:"X"}];
+const TRACKS=[{y:488,x1:508,x2:1436,c:1,l:"C"},{y:525,x1:508,x2:1436,l:"B"},{y:705,x1:236,x2:676,c:1,l:"J"},{y:736,x1:236,x2:676,l:"H"},{y:705,x1:708,x2:1436,c:1,l:"F"},{y:736,x1:708,x2:1436,l:"G"},{y:838,x1:236,x2:676,c:1,l:"K"},{y:869,x1:236,x2:676,l:"Q"},{y:838,x1:708,x2:1436,c:1,l:"N"},{y:868,x1:708,x2:1436,l:"M"},{y:987,x1:236,x2:676,c:1,l:"V"},{y:1018,x1:236,x2:676,l:"W"},{y:987,x1:708,x2:1436,c:1,l:"T"},{y:1018,x1:708,x2:1436,l:"U"},{y:1138,x1:822,x2:988,c:1,l:"Y"},{y:1169,x1:822,x2:988,l:"X"}];
 const D={tilt:0,az:0,beam:36,h:3.5};
 let S={scale:62,op:38,fx:[{t:5,x:1402,tilt:0,az:0,beam:36,h:3.5},{t:4,x:1348,tilt:0,az:0,beam:36,h:3.5}]},sel=0,mode="add",showLight=true,showCentre=false,drag=null;
 try{const s=JSON.parse(localStorage.getItem("lb103-lights-v3")||"null");if(s&&s.fx)S=s}catch(e){}
