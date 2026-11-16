@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4th Space LB-103 Layout Planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{--bg:#f4f4f5;--panel:#fff;--ink:#1c1c1e;--mute:#6b6b70;--line:#d9d9de;--accent:#912338}
+@media (prefers-color-scheme:dark){:root{--bg:#18181a;--panel:#232326;--ink:#f2f2f3;--mute:#9a9aa0;--line:#3a3a3f}}
+*{box-sizing:border-box}
+body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100vh}
+header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:15px;margin:0 8px 0 0}
+button,label.btn,input,select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px}
+button,label.btn{cursor:pointer}
+button:hover,label.btn:hover{border-color:var(--accent)}
+input[type=number]{width:64px}
+main{flex:1;display:flex;min-height:0}
+aside{width:190px;padding:10px;background:var(--panel);border-right:1px solid var(--line);overflow:auto}
+aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:0 0 8px}
+.lib{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.lib button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;font-size:12px}
+.lib svg{width:56px;height:40px}
+#stage{flex:1;overflow:auto;padding:12px}
+#plan{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--line);touch-action:none;user-select:none}
+.item{cursor:grab}
+.art *{vector-effect:non-scaling-stroke}
+.selbox{display:none;fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none}
+.item.sel .selbox{display:block}
+.item>text{font:600 12px system-ui;fill:#111;text-anchor:middle;dominant-baseline:central;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+#sel{display:none;gap:6px;align-items:center;flex-wrap:wrap}
+#sel.on{display:flex}
+#capture{position:relative;line-height:0}
+#inv{position:absolute;left:12px;bottom:12px;padding:8px 12px;background:rgba(255,255,255,.92);border:1px solid #bbb;border-radius:8px;font:12px/1.6 system-ui,-apple-system,'Segoe UI',sans-serif;color:#111;pointer-events:none}
+#inv:empty{display:none}
+#inv h3{margin:0 0 4px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#555}
+#inv .over{color:#c0392b}
+button:disabled{opacity:.6;cursor:wait}
+#msg{font-size:12px;color:var(--mute);padding:0 12px 8px}
+body.clean header,body.clean aside,body.clean #msg{display:none}
+@media print{header,aside,#msg{display:none}#stage{padding:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>LB-103 Layout Planner</h1>
+  <button id="undo">Undo</button>
+  <label><input type="checkbox" id="snap" checked> Snap</label>
+  <label title="Pixels per baseplan grid square (= the Podium = 40 cm)">Scale <input type="number" id="scale" value="12" min="1" step="0.5"> px per grid square</label>
+  <button id="save">Save JSON</button>
+  <label class="btn">Load JSON<input type="file" id="load" accept=".json" hidden></label>
+  <button id="pngBtn" title="Download a 1920×1080 PNG of the layout" onclick="saveAsPng()">Download Image</button>
+  <label class="btn">Choose floorplan…<input type="file" id="bgfile" accept="image/*" hidden></label>
+  <button id="clean">Clean view</button>
+  <button id="clear">Clear all</button>
+  <span id="sel">
+    <input id="lbl" placeholder="Label">
+    <button data-r="-15">⟲ 15°</button><button data-r="15">⟳ 15°</button><button data-r="90">90°</button>
+    <button id="dup">Duplicate</button><button id="del">Delete</button>
+  </span>
+</header>
+<div id="msg">Click a shape to add it to the room. Drag to move; select to rotate, label, duplicate or delete. Keys: Delete, arrows to nudge, R rotates, Ctrl/Cmd+D duplicates.</div>
+<main>
+  <aside><h2>Library</h2><div class="lib" id="lib"></div></aside>
+  <div id="stage">
+    <div id="capture"><svg id="plan" viewBox="0 0 1600 1000">
+      <image id="bg" x="0" y="0" width="1600" height="1000" href=""/>
+      <g id="items"></g>
+    </svg><div id="inv"></div></div>
+  </div>
+</main>
+<script>
+// Floorplan: tries the same folder first, then the full URL, else use "Choose floorplan…"
+const BG_SOURCES=["4SP_Base1.001.png","https://cu4thspace.github.io/LB103/4SP_Base1.001.png"];
+
+// Library. Art is drawn in pixels of the furniture legend, centred on (0,0).
+// U = pixels of the Podium in that drawing = 1 baseplan grid square = 40 cm. Set the Scale box to px per grid square.
+// k = counter key, m = how many you own (omit for no limit), b = bounding box [x,y,w,h].
+const U=31;
+const r=(x,y,w,h,f="#fff",c="#777",e="")=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}" stroke="${c}" stroke-width="1" ${e}/>`;
+const t=(x,y,s,z=13,f="#888",e="")=>`<text x="${x}" y="${y}" font-size="${z}" font-family="system-ui,sans-serif" text-anchor="middle" dominant-baseline="central" fill="${f}" ${e}>${s}</text>`;
+const ln=(a,b,c,d,s="#555",w=2)=>`<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="${s}" stroke-width="${w}"/>`;
+const ci=(x,y,q,f="none",c="#555")=>`<circle cx="${x}" cy="${y}" r="${q}" fill="${f}" stroke="${c}" stroke-width="1"/>`;
+const g=(tr,s)=>`<g transform="${tr}">${s}</g>`;
+const tb=(w,h,s="",f="#fff",c="#777")=>r(-w/2,-h/2,w,h,f,c)+(s?s.split("|").map((l,i,a)=>t(0,(i-(a.length-1)/2)*15,l,15)).join(""):"");
+const T=(k,name,w,h,art,o={})=>({k,name,b:[-w/2,-h/2,w,h],art:r(-w/2,-h/2,w,h,"transparent","none")+art,label:"",...o});
+const cwall=(n,sl)=>Array.from({length:n},(_,i)=>g(`translate(${(i-(n-1)/2)*34} ${(i-(n-1)/2)*sl}) rotate(28)`,r(-14,-14,28,28,"#fff","#777",'fill-opacity=".6"'))).join("");
+const carpet=(c,w)=>r(-c*17.5,-w*17.5,c*35,w*35,"#d5e8d4","#82b366")+Array.from({length:c-1},(_,i)=>ln(-c*17.5+35*(i+1),-w*17.5,-c*17.5+35*(i+1),w*17.5,"#82b366",1)).join("")+Array.from({length:w-1},(_,i)=>ln(-c*17.5,-w*17.5+35*(i+1),c*17.5,-w*17.5+35*(i+1),"#82b366",1)).join("");
+const cam=a=>g(`rotate(${a})`,ln(0,0,-28,-18,"#444",1)+ln(0,0,30,-24,"#444",1)+ln(0,0,0,30,"#444",1)+ci(-28,-18,3,"#444")+ci(30,-24,3,"#444")+ci(0,30,3,"#444")+g("rotate(45)",r(-8,-8,16,16,"#fff","#555")+r(-1,-1,7,7,"#333","none")));
+const cup=tr=>g(tr,r(-28,-28,56,56,"#999","#999")+r(-23,-24,46,17,"#fff","none")+t(0,10,"CUP",15,"#fff"));
+const zig=(n,w,h)=>Array.from({length:n},(_,i)=>r(-n*w/2+i*w,i%2?0:-h,w,h,"#fff","#888")).join("");
+const TYPES={
+  mscr:T("ms","Mobile screen",82,24,ln(-41,0,41,0,"#333",3)+r(-28,-12,56,24,"#333","#111"),{m:3}),
+  gscr:T("gs","Greeter screen",60,84,g("rotate(35)",ln(0,-45,0,45,"#333",3)+r(-12,-20,24,40,"#333","#111"))),
+  beacon:T("be","Beacon",30,30,r(-14,-14,28,28,"#fff","#555"),{m:1}),
+  pivot:T("pv","Pivot screen",164,28,ln(-81,0,-71,0,"#aaa",3)+r(-71,-12,98,25,"#999","#888")+t(-22,0,"PIVOT",15,"#fff")+ln(27,0,54,0,"#aaa",3)+ci(67,0,13,"#fff","#888"),{m:2}),
+  nightc:T("nc","NightCinema screen",194,34,ln(-95,11,95,11,"#aaa",4)+t(0,-6,"NIGHTCINEMA",16),{m:1}),
+  dayc:T("dy","DayCinema screen",186,34,ln(-91,-9,91,-9,"#aaa",3)+t(0,8,"DAYCINEMA",16),{m:1}),
+  poufl:T("pl","Large pouf",111,28,r(-55,-14,111,28,"#9a9a9a","#666",'rx="14"')+r(-48,-10,97,8,"#fff","none",'rx="4" fill-opacity=".35"'),{label:"L1",m:3}),
+  poufs:T("ps","Small pouf",68,29,r(-34,-14,68,28,"#9a9a9a","#666",'rx="14"')+r(-28,-10,56,8,"#fff","none",'rx="4" fill-opacity=".35"'),{label:"S1",m:3}),
+  stool:T("hs","High stool",30,30,r(-15,-15,30,30,"#666","#444",'rx="5"')+r(-15,-15,30,13,"#aaa","#444",'rx="5"'),{m:12}),
+  rolling:T("rc","Rolling chair",40,40,g("rotate(-45)",r(-15,-26,30,10,"#aaa","#555",'rx="5"'))+g("rotate(45)",r(-14,-14,28,28,"#666","#333",'rx="9"')),{m:10}),
+  stdchair:T("sc","Standard chair",33,33,r(-16,-16,33,33,"#666","#444")+r(10,-16,7,33,"#aaa","#444"),{m:35}),
+  main:T("lt","Large table",146,106,tb(146,106,"MAIN TABLE"),{m:1}),
+  lgcube:T("lc","Large cube table",88,58,tb(88,58,"LG"),{m:2}),
+  lab:T("lab","Lab table",157,70,tb(157,70,"LAB|TABLE"),{m:3}),
+  smcube:T("sm","Small cube table",58,56,tb(58,56,"SM"),{m:1}),
+  quick:T("qk","Quick table",138,65,tb(138,65,"QUICK|TABLE")+r(-62,-26,5,52,"#d9c3a0","none")+r(57,-26,5,52,"#d9c3a0","none"),{m:4}),
+  office:T("od","Office desk",158,70,tb(158,70,"OFFICE|DESK"),{m:1}),
+  podium:T("po","Podium",31,31,r(-15.5,-15.5,31,31,"#fff","#666"),{m:1}),
+  plinth:T("cp","Cube plinth",42,42,g("rotate(15)",r(-15,-15,30,30,"#fff","#777")+ci(0,0,2,"#999","#999")),{m:10}),
+  lion:T("li","Display lion",62,62,r(-31,-31,62,62,"#9a9a9a","#666")+r(-26,-27,52,25,"#fff","#666")+t(0,19,"LION",16,"#fff"),{m:3}),
+  tower:T("ct","Cube tower",70,42,tb(70,42,"TALL"),{m:2}),
+  light:T("lg","Light table",88,88,r(-44,-44,88,88,"#fff","#888")+tb(74,74,"LIGHT|TABLE","#fff","#888"),{m:1}),
+  cw5:T("cw","Cube wall (5)",174,46,cwall(5,2),{cn:"Cube walls",m:4}),
+  cw4:T("cw","Cube wall (4)",140,44,cwall(4,2),{cn:"Cube walls",m:4}),
+  cdw:T("cd","Cube display wall",72,42,cwall(2,4),{m:2}),
+  wboard:T("wb","Whiteboard",44,12,ln(-20,0,20,0,"#333",2)+r(-22,-5,3,10,"#555","none")+r(19,-5,3,10,"#555","none"),{m:3}),
+  coat:T("cr","Coat rack",20,84,ln(0,-40,0,40,"#444",2)+r(-10,-42,6,6,"#fff","#666")+r(4,-42,6,6,"#fff","#666")+r(-10,36,6,6,"#fff","#666")+r(4,36,6,6,"#fff","#666"),{m:2}),
+  cam1:T("c1","Camera 1",68,64,cam(0)),
+  cam2:T("c2","Camera 2",68,64,cam(25)),
+  row:T("rw","Row of chairs (7)",237,33,Array.from({length:7},(_,i)=>r(-118+i*34,-16.5,31,33,"#666","#444")+r(-118+i*34,-16.5,31,8,"#999","#444")).join("")),
+  seating:T("cs","Cube seating",240,160,r(-72,-79,108,59)+r(-72,-79,108,31,"#999","#888")+t(-18,-64,"COUCH",15,"#fff")+g("rotate(-3)",r(-118,-3,45,83)+r(-118,-3,17,83,"#999","#888")+t(-110,38,"CHAIR",13,"#fff",'transform="rotate(-90 -110 38)"'))+g("rotate(2)",r(74,-29,46,84)+r(74,-29,17,84,"#999","#888")+t(82,13,"CHAIR",13,"#fff",'transform="rotate(-90 82 13)"'))+r(-47,17,61,60)+t(-17,47,"TABLE",12)),
+  sink:T("sk","Rolling sink",52,45,r(-26,-22,52,45,"#444","#222",'rx="8"')+r(-20,-3,16,6,"#fff","none")+ci(10,0,5,"#aaa","none")),
+  steel:T("st","Steel table",46,150,r(-23,-75,46,150,"#a09d9d","#888")),
+  curtain:T("bk","Black curtain",36,388,'<path d="M0 -190 C-14 -150 14 -110 2 -70 S-14 -10 0 0 S14 70 2 110 S-14 150 0 190" fill="none" stroke="#aaa" stroke-width="6"/>'),
+  press:T("cu","Concordia Press",144,78,cup("translate(-31 1) rotate(35)")+cup("translate(43 5)")),
+  grids:T("gr","Grids",189,54,zig(7,27,27)),
+  feet:T("ft","Feet",188,46,zig(8,23.5,23)),
+  metres:T("mt","Metres",203,37,zig(3,67.7,18.5)),
+  carpet6:T("k6","Carpet squares 6×6",210,210,carpet(6,6)),
+  carpet8:T("k8","Carpet squares 8×9",280,315,carpet(8,9))
+};
+
+const $=id=>document.getElementById(id), svg=$("plan"), layer=$("items");
+let items=[], selId=null, hist=[], uid=1, drag=null;
+const S=()=>+$("scale").value||12;
+const NS="http://www.w3.org/2000/svg";
+
+// Library buttons
+$("lib").innerHTML=Object.entries(TYPES).map(([k,t])=>`<button data-t="${k}"><svg class="art" viewBox="${t.b[0]-.1} ${t.b[1]-.1} ${t.b[2]+.2} ${t.b[3]+.2}">${t.art}</svg>${t.name}</button>`).join("");
+$("lib").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  const vb=svg.viewBox.baseVal; push();
+  const it={id:uid++,type:b.dataset.t,x:vb.width/2+items.length%5*20,y:vb.height/2+items.length%5*20,rot:0,label:TYPES[b.dataset.t].label};
+  items.push(it);selId=it.id;render()};
+
+function push(){hist.push(JSON.stringify(items));if(hist.length>100)hist.shift()}
+function snap(v){return $("snap").checked?Math.round(v/(S()/2))*(S()/2):v}
+
+function render(){
+  layer.innerHTML="";const k=S()/U;
+  for(const it of items){
+    const t=TYPES[it.type],b=t.b;
+    const g=document.createElementNS(NS,"g");
+    g.setAttribute("class","item"+(it.id===selId?" sel":""));
+    g.dataset.id=it.id;
+    g.setAttribute("transform",`translate(${it.x} ${it.y}) rotate(${it.rot})`);
+    g.innerHTML=`<g class="art" transform="scale(${k})">${t.art}</g><rect class="selbox" x="${b[0]*k-3}" y="${b[1]*k-3}" width="${b[2]*k+6}" height="${b[3]*k+6}"/>`;
+    if(it.label){const tx=document.createElementNS(NS,"text");tx.textContent=it.label;
+      tx.setAttribute("transform",`rotate(${-it.rot})`);
+      Object.entries({"text-anchor":"middle","dominant-baseline":"central","font-family":"system-ui,sans-serif","font-size":12,"font-weight":600,fill:"#111",stroke:"#fff","stroke-width":3,"paint-order":"stroke","stroke-linejoin":"round"}).forEach(([a,v])=>tx.setAttribute(a,v));
+      g.appendChild(tx)}
+    layer.appendChild(g);
+  }
+  const cur=items.find(i=>i.id===selId);
+  $("sel").classList.toggle("on",!!cur);
+  if(cur&&document.activeElement!==$("lbl"))$("lbl").value=cur.label||"";
+  const cnt={},meta={};
+  items.forEach(i=>{const q=TYPES[i.type].k;cnt[q]=(cnt[q]||0)+1});
+  Object.values(TYPES).forEach(q=>{if(!meta[q.k])meta[q.k]=q});
+  const row=(l,v,max)=>`<div class="${max&&v>max?"over":""}">${l}: <b>${v}</b>${max?" / "+max:""}</div>`;
+  const rows=Object.keys(meta).filter(q=>cnt[q]).map(q=>row(meta[q].cn||meta[q].name,cnt[q],meta[q].m)).join("");
+  $("inv").innerHTML=rows?"<h3>Furniture</h3>"+rows:"";
+}
+
+function pt(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
+svg.addEventListener("pointerdown",e=>{
+  const g=e.target.closest(".item");
+  if(!g){selId=null;render();return}
+  selId=+g.dataset.id;const it=items.find(i=>i.id===selId),p=pt(e);
+  drag={dx:it.x-p.x,dy:it.y-p.y,moved:false};push();
+  svg.setPointerCapture(e.pointerId);render();
+});
+svg.addEventListener("pointermove",e=>{
+  if(!drag)return;const it=items.find(i=>i.id===selId),p=pt(e);
+  it.x=snap(p.x+drag.dx);it.y=snap(p.y+drag.dy);drag.moved=true;render();
+});
+svg.addEventListener("pointerup",()=>{if(drag&&!drag.moved)hist.pop();drag=null});
+
+const cur=()=>items.find(i=>i.id===selId);
+document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{const c=cur();if(!c)return;push();c.rot=(c.rot+ +b.dataset.r)%360;render()});
+$("lbl").oninput=e=>{const c=cur();if(c){c.label=e.target.value;render()}};
+$("lbl").onchange=()=>{};
+function dup(){const c=cur();if(!c)return;push();const n={...c,id:uid++,x:c.x+S()*2,y:c.y+S()*2};items.push(n);selId=n.id;render()}
+function del(){if(!cur())return;push();items=items.filter(i=>i.id!==selId);selId=null;render()}
+$("dup").onclick=dup;$("del").onclick=del;
+$("undo").onclick=()=>{if(hist.length){items=JSON.parse(hist.pop());selId=null;render()}};
+$("clear").onclick=()=>{if(items.length&&confirm("Remove all shapes?")){push();items=[];selId=null;render()}};
+$("scale").oninput=render;
+$("clean").onclick=()=>{document.body.classList.add("clean");selId=null;render();
+  const b=document.createElement("button");b.textContent="Exit clean view";
+  b.style.cssText="position:fixed;top:8px;right:8px;z-index:9";b.onclick=()=>{document.body.classList.remove("clean");b.remove()};document.body.appendChild(b)};
+
+window.addEventListener("keydown",e=>{
+  if(["INPUT","TEXTAREA"].includes(document.activeElement.tagName))return;
+  const c=cur(),k=e.key;
+  if((e.ctrlKey||e.metaKey)&&k==="d"){e.preventDefault();dup();return}
+  if((e.ctrlKey||e.metaKey)&&k==="z"){e.preventDefault();$("undo").click();return}
+  if(!c)return;
+  if(k==="Delete"||k==="Backspace"){e.preventDefault();del()}
+  else if(k==="r"||k==="R"){push();c.rot=(c.rot+(e.shiftKey?-15:15))%360;render()}
+  else if(k.startsWith("Arrow")){e.preventDefault();push();const d=e.shiftKey?S()*2:S()/2;
+    if(k==="ArrowLeft")c.x-=d;if(k==="ArrowRight")c.x+=d;if(k==="ArrowUp")c.y-=d;if(k==="ArrowDown")c.y+=d;render()}
+});
+
+// Save / load
+$("save").onclick=()=>{const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({scale:S(),items},null,1)],{type:"application/json"}));
+  a.download="LB103-layout.json";a.click()};
+$("load").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  try{const d=JSON.parse(await f.text());push();items=(d.items||[]).filter(i=>TYPES[i.type]);if(d.scale)$("scale").value=d.scale;
+    uid=Math.max(0,...items.map(i=>i.id))+1;selId=null;render()}catch{alert("Couldn't read that layout file.")}e.target.value=""};
+
+// Background loading
+function setBg(src){return new Promise((res,rej)=>{const im=new Image();
+  im.onload=()=>{const bg=$("bg");bg.setAttribute("href",src);
+    bg.setAttribute("width",im.naturalWidth);bg.setAttribute("height",im.naturalHeight);
+    svg.setAttribute("viewBox",`0 0 ${im.naturalWidth} ${im.naturalHeight}`);res()};
+  im.onerror=rej;im.src=src})}
+(async()=>{for(const s of BG_SOURCES){try{await setBg(s);return}catch{}}
+  $("msg").textContent="Couldn't load the floorplan automatically — use “Choose floorplan…” to pick 4SP_Base1.001.png."})();
+$("bgfile").onchange=e=>{const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>setBg(r.result);r.readAsDataURL(f)};
+
+// ---- Save as PNG (1920x1080) ----
+function bgToDataUrl(){
+  const src=$("bg").getAttribute("href");
+  if(!src||src.startsWith("data:"))return Promise.resolve(null);
+  return fetch(src).then(r=>{if(!r.ok)throw new Error("Floorplan fetch failed");return r.blob()})
+    .then(b=>new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(b)}));
+}
+async function saveAsPng(){
+  const btn=$("pngBtn"),stage=$("stage"),wrap=$("capture"),bg=$("bg");
+  const prevSel=selId,prevHref=bg.getAttribute("href"),prevOverflow=stage.style.overflow;
+  btn.disabled=true;btn.innerHTML="…";
+  try{
+    selId=null;render();                                   // no selection outline in the image
+    layer.querySelectorAll(".selbox").forEach(n=>n.remove());
+    layer.querySelectorAll(".art *").forEach(n=>n.setAttribute("vector-effect","non-scaling-stroke"));
+    const data=await bgToDataUrl();                         // SVG-as-image can't load external files
+    if(data)bg.setAttribute("href",data);
+    stage.style.overflow="visible";
+    const shot=await html2canvas(wrap,{useCORS:true,allowTaint:false,scale:2,backgroundColor:"#111",imageTimeout:10000,logging:false});
+
+    const d=new Date(),ds=[d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");
+    const out=document.createElement("canvas");out.width=1920;out.height=1080;
+    const c=out.getContext("2d");
+    c.fillStyle="#111";c.fillRect(0,0,1920,1080);
+    c.textBaseline="middle";c.fillStyle="#fff";
+    c.font="700 40px system-ui,-apple-system,'Segoe UI',sans-serif";
+    c.fillText("4thSpace_Layout",40,48);
+    const tw=c.measureText("4thSpace_Layout").width;
+    c.fillStyle="#aaa";c.font="400 32px system-ui,-apple-system,'Segoe UI',sans-serif";
+    c.fillText("—  "+ds,40+tw+18,48);
+    const bx=40,by=96,bw=1840,bh=944,k=Math.min(bw/shot.width,bh/shot.height);
+    const w=shot.width*k,h=shot.height*k;
+    c.imageSmoothingQuality="high";
+    c.drawImage(shot,bx+(bw-w)/2,by+(bh-h)/2,w,h);
+
+    const a=document.createElement("a");
+    a.download="4thSpace_Layout_"+ds+".png";
+    a.href=out.toDataURL("image/png");
+    document.body.appendChild(a);a.click();a.remove();
+  }catch(err){
+    console.error(err);
+    alert("Export failed — see console for details.");
+  }finally{
+    stage.style.overflow=prevOverflow;
+    bg.setAttribute("href",prevHref);
+    selId=prevSel;render();
+    btn.disabled=false;btn.innerHTML="Download Image";
+  }
+}
+
+render();
+</script>
+</body>
+</html>
